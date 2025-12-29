@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nano BASIC WASM</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 {
+            color: #4ec9b0;
+        }
+        #terminal {
+            background-color: #0c0c0c;
+            border: 1px solid #333;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #input {
+            flex: 1;
+            background-color: #2d2d2d;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-radius: 3px;
+        }
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 3px;
+        }
+        button:hover {
+            background-color: #1177bb;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .prompt {
+            color: #4ec9b0;
+        }
+        .output {
+            color: #ce9178;
+        }
+        .error {
+            color: #f48771;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Nano BASIC WASM</h1>
+    <div id="terminal"></div>
+    <div class="input-container">
+        <input type="text" id="input" placeholder="BASIC コマンドを入力してください..." disabled>
+        <button id="execute" onclick="executeCommand()" disabled>実行</button>
+        <button id="clear" onclick="clearTerminal()">クリア</button>
+    </div>
+    <div id="status">ロード中...</div>
+
+    <script src="dist/nano_basic.js"></script>
+    <script>
+        let Module;
+        let terminal = document.getElementById('terminal');
+        let inputField = document.getElementById('input');
+        let executeButton = document.getElementById('execute');
+        let status = document.getElementById('status');
+        let isInitialized = false;
+
+        // WASMモジュールをロード
+        createNanoBasicModule().then(function(module) {
+            Module = module;
+            
+            // 出力コールバックを設定
+            Module.onOutput = function(char) {
+                terminal.textContent += char;
+                terminal.scrollTop = terminal.scrollHeight;
+            };
+            
+            Module.onFlush = function() {
+                // フラッシュ時の処理（必要に応じて）
+            };
+            
+            // nano_basicを初期化
+            Module._nano_basic_wasm_init();
+            isInitialized = true;
+            
+            inputField.disabled = false;
+            executeButton.disabled = false;
+            status.textContent = '準備完了 - BASIC コマンドを入力してください';
+            
+            addToTerminal('<span class="prompt">Nano BASIC WASM へようこそ！</span>\n');
+            addToTerminal('<span class="prompt">例: 10 PRINT "HELLO"\n20 GOTO 10\nRUN</span>\n\n');
+        }).catch(function(err) {
+            status.textContent = 'エラー: WASMモジュールのロードに失敗しました';
+            addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+        });
+
+        function addToTerminal(text) {
+            terminal.innerHTML += text;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function executeCommand() {
+            if (!isInitialized) {
+                return;
+            }
+            
+            let input = inputField.value.trim();
+            if (input === '') {
+                return;
+            }
+            
+            addToTerminal('<span class="prompt">&gt; </span>' + input + '\n');
+            
+            try {
+                // 文字列をメモリに配置
+                const lengthBytes = Module.lengthBytesUTF8(input) + 1;
+                const ptr = Module._malloc(lengthBytes);
+                Module.stringToUTF8(input, ptr, lengthBytes);
+                
+                // コマンドを実行
+                let result = Module._nano_basic_wasm_exec(ptr);
+                
+                // メモリを解放
+                Module._free(ptr);
+                
+                if (result < 0) {
+                    addToTerminal('<span class="error">エラー: 入力が長すぎます</span>\n');
+                }
+            } catch (err) {
+                addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+            }
+            
+            inputField.value = '';
+            inputField.focus();
+        }
+
+        function clearTerminal() {
+            terminal.textContent = '';
+            if (Module && isInitialized) {
+                Module._nano_basic_wasm_clear_output();
+            }
+        }
+
+        // Enterキーで実行
+        inputField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+    </script>
+</body>
+</html>

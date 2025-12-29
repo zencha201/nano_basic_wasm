@@ -48,6 +48,28 @@
 .tmp_versions/
 modules.order
 Module.symvers
+
+# WASM build output
+dist/
+*.wasm
+*.js.mem
+
+# Emscripten SDK
+emsdk/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
 Mkfile.old
 dkms.conf
 
