@@ -21,6 +21,9 @@ EMLDFLAGS = -s WASM=1 \
 # Emscripten のチェック
 EMCC_EXISTS := $(shell command -v emcc 2> /dev/null)
 
+# セットアップ完了フラグ（無限ループ防止用）
+SETUP_DONE ?= 0
+
 # デバッグモード
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)
@@ -53,13 +56,18 @@ all: check-emscripten $(WASM_OUTPUT)
 # Emscripten の存在チェックとセットアップ
 check-emscripten:
 ifndef EMCC_EXISTS
+ifeq ($(SETUP_DONE), 0)
 	@echo "Emscripten が見つかりません。セットアップを開始します..."
 	@$(MAKE) setup-emscripten
-	@echo "Emscripten のセットアップが完了しました。"
-	@echo "以下のコマンドを実行して環境変数を設定してください:"
+	@echo "Emscripten のセットアップが完了しました。ビルドを続行します..."
+	@bash -c '. $(EMSDK_ENV) && $(MAKE) SETUP_DONE=1'
+	@exit 0
+else
+	@echo "エラー: Emscripten のセットアップ後も emcc が見つかりません。"
+	@echo "手動で以下のコマンドを実行してください:"
 	@echo "  source $(EMSDK_DIR)/emsdk_env.sh"
-	@echo "その後、再度 make を実行してください。"
 	@exit 1
+endif
 else
 	@echo "Emscripten が見つかりました: $(EMCC_EXISTS)"
 endif
@@ -75,9 +83,6 @@ setup-emscripten:
 	@echo ""
 	@echo "==================================================================="
 	@echo "Emscripten のインストールが完了しました！"
-	@echo "==================================================================="
-	@echo "再度 'make' を実行するとビルドが開始されます。"
-	@echo "（環境変数は自動的に設定されます）"
 	@echo "==================================================================="
 
 $(WASM_OUTPUT): $(LIB_OBJS) $(WASM_OBJS)
