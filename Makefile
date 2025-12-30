@@ -92,10 +92,18 @@ $(WASM_OUTPUT): $(LIB_OBJS) $(WASM_OBJS)
 %.o: %.c
 	$(EMCC_CMD) $(EMCFLAGS) -c $< -o $@
 
+run: all
+	@echo "==================================================================="
+	@echo "ビルドが完了しました。HTTPサーバを起動します..."
+	@echo "ブラウザで http://localhost:8000 を開いてください"
+	@echo "終了するには Ctrl+C を押してください"
+	@echo "==================================================================="
+	@python3 -m http.server 8000
+
 clean:
 	rm -rf $(LIB_OBJS) $(WASM_OBJS) $(OUTPUT_DIR)
 
 clean-all: clean
 	rm -rf $(EMSDK_DIR)
 
-.PHONY: all check-emscripten setup-emscripten clean clean-all
+.PHONY: all check-emscripten setup-emscripten run clean clean-all
