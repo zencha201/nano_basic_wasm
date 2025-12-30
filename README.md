@@ -6,6 +6,10 @@ Nano BASIC インタプリタの WebAssembly 版です。
 
 このプロジェクトは [nano_basic](https://github.com/zencha201/nano_basic) ライブラリを WebAssembly にコンパイルし、Web ブラウザ上で BASIC プログラムを実行できるようにしたものです。
 
+## 実行
+
+[GitHub Pages上で実行](https://zencha201.github.io/nano_basic_wasm/)
+
 ## ビルド方法
 
 ### 前提条件
