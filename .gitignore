@@ -50,8 +50,7 @@ modules.order
 Module.symvers
 
 # WASM build output
-dist/
-*.wasm
+# dist/ - GitHub Pages用にコミットするため除外しない
 *.js.mem
 
 # Emscripten SDK
