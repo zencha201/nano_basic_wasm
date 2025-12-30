@@ -51,7 +51,7 @@ EM_JS(void, js_free_string, (char* ptr), {
 });
 
 // プラットフォーム依存関数の実装
-void platform_print_ch(NB_I8 ch)
+static void platfom_print_ch(NB_I8 ch)
 {
     if (output_pos < BUF_SIZE - 1) {
         output_buffer[output_pos++] = ch;
@@ -71,7 +71,7 @@ static NB_BOOL file_is_open = NB_FALSE;
 
 static NB_I8 _buf[256] = "";
 
-NB_BOOL platform_fopen(const NB_I8 *name, NB_BOOL write_mode)
+static NB_BOOL platform_fopen(const NB_I8 *name, NB_BOOL write_mode)
 {
     if (file_is_open) {
         return NB_FALSE; // 既にファイルが開かれている
@@ -107,7 +107,7 @@ NB_BOOL platform_fopen(const NB_I8 *name, NB_BOOL write_mode)
     return NB_TRUE;
 }
 
-void platform_fclose()
+static void platform_fclose()
 {
     if (!file_is_open) {
         return;
@@ -123,7 +123,7 @@ void platform_fclose()
     file_write_pos = 0;
 }
 
-NB_BOOL platform_fread(NB_I8 **buf, NB_SIZE *size)
+static NB_BOOL platform_fread(NB_I8 **buf, NB_SIZE *size)
 {
     if (!file_is_open || file_is_write_mode) {
         return NB_FALSE;
@@ -154,7 +154,7 @@ NB_BOOL platform_fread(NB_I8 **buf, NB_SIZE *size)
     return NB_TRUE;
 }
 
-NB_BOOL platform_fwrite(NB_LINE_NUM num, NB_I8 *buf, NB_SIZE size)
+static NB_BOOL platform_fwrite(NB_LINE_NUM num, NB_I8 *buf, NB_SIZE size)
 {
     if (!file_is_open || !file_is_write_mode) {
         return NB_FALSE;
@@ -238,6 +238,11 @@ void nano_basic_wasm_init()
     output_buffer[0] = '\0';
     
     nano_basic_init(memory, CODE_SIZE, VALUE_SIZE, STACK_SIZE);
+    nano_basic_set_platform_print_ch(platfom_print_ch);
+    nano_basic_set_platform_fopen(platform_fopen);
+    nano_basic_set_platform_fclose(platform_fclose);
+    nano_basic_set_platform_fread(platform_fread);
+    nano_basic_set_platform_fwrite(platform_fwrite);
     nano_basic_add_command("IMP", command_import);
     nano_basic_add_command("EXP", command_export);
 }

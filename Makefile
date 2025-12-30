@@ -39,6 +39,7 @@ LIB_SRCS = lib/nano_basic/src/calc.c \
            lib/nano_basic/src/debug.c \
            lib/nano_basic/src/interpreter.c \
            lib/nano_basic/src/memory.c \
+           lib/nano_basic/src/platform.c \
            lib/nano_basic/src/util.c
 
 WASM_SRCS = src/nano_basic_wasm.c
