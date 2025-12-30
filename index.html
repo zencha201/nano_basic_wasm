@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nano BASIC WASM</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        h1 {
+            color: #4ec9b0;
+            margin: 10px 0 20px 0;
+            font-size: 1.5rem;
+        }
+        #terminal {
+            background-color: #0c0c0c;
+            border: 1px solid #333;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 14px;
+            flex: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #input {
+            flex: 1;
+            min-width: 200px;
+            background-color: #2d2d2d;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            border-radius: 3px;
+            -webkit-appearance: none;
+        }
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 3px;
+            min-height: 44px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        button:active {
+            background-color: #1177bb;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .prompt {
+            color: #4ec9b0;
+        }
+        .output {
+            color: #ce9178;
+        }
+        .error {
+            color: #f48771;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        /* スマホ対応のメディアクエリ */
+        @media screen and (max-width: 768px) {
+            body {
+                padding: 10px;
+                min-height: 100vh;
+            }
+            h1 {
+                font-size: 1.2rem;
+                margin: 5px 0 15px 0;
+            }
+            #terminal {
+                height: calc(100vh - 200px);
+                min-height: 300px;
+                padding: 10px;
+                font-size: 13px;
+            }
+            #input {
+                font-size: 16px;
+                padding: 12px;
+                width: 100%;
+            }
+            button {
+                font-size: 14px;
+                padding: 12px 16px;
+                flex: 1;
+                min-width: 80px;
+            }
+            .input-container {
+                gap: 8px;
+            }
+            #status {
+                font-size: 11px;
+                padding: 8px;
+            }
+        }
+
+        /* 横向きスマホ対応 */
+        @media screen and (max-width: 768px) and (orientation: landscape) {
+            body {
+                padding: 5px;
+            }
+            h1 {
+                font-size: 1rem;
+                margin: 5px 0 10px 0;
+            }
+            #terminal {
+                height: calc(100vh - 150px);
+                min-height: 200px;
+            }
+        }
+
+        /* 小さい画面向け */
+        @media screen and (max-width: 480px) {
+            h1 {
+                font-size: 1.1rem;
+            }
+            #terminal {
+                font-size: 12px;
+            }
+            button {
+                font-size: 14px;
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Nano BASIC WASM</h1>
+    <div id="terminal"></div>
+    <div class="input-container">
+        <input type="text" id="input" placeholder="BASIC コマンドを入力してください..." disabled>
+        <button id="execute" onclick="executeCommand()" disabled>実行</button>
+        <button id="clear" onclick="clearTerminal()">クリア</button>
+    </div>
+    <div id="status">ロード中...</div>
+
+    <script src="dist/nano_basic.js"></script>
+    <script>
+        let Module;
+        let terminal = document.getElementById('terminal');
+        let inputField = document.getElementById('input');
+        let executeButton = document.getElementById('execute');
+        let status = document.getElementById('status');
+        let isInitialized = false;
+        let isRunning = false;
+        let isWaitingForInput = false;
+        
+        const NB_STATE_RUN_MODE = 0;
+        const NB_STATE_REPL = 1;
+        const NB_STATE_INPUT_NUMBER = 2;
+        const NB_STATE_END = 3;
+
+        // WASMモジュールをロード
+        createNanoBasicModule().then(function(module) {
+            Module = module;
+            
+            // 出力コールバックを設定
+            Module.onOutput = function(char) {
+                terminal.textContent += char;
+                terminal.scrollTop = terminal.scrollHeight;
+            };
+            
+            Module.onFlush = function() {
+                // フラッシュ時の処理（必要に応じて）
+            };
+            
+            // nano_basicを初期化
+            Module._nano_basic_wasm_init();
+            isInitialized = true;
+            
+            inputField.disabled = false;
+            executeButton.disabled = false;
+            status.textContent = '準備完了 - BASIC コマンドを入力してください';
+            
+            addToTerminal('<span class="prompt">Nano BASIC WASM へようこそ！</span>\n');
+            addToTerminal('<span class="prompt">例: 10 PRINT "HELLO"\nRUN</span>\n');
+            addToTerminal('<span class="prompt">SAVE/LOAD: プログラムをローカルストレージに保存・読み込みできます</span>\n');
+            addToTerminal('<span class="prompt">例: SAVE "MYPROG" / LOAD "MYPROG"</span>\n\n');
+        }).catch(function(err) {
+            status.textContent = 'エラー: WASMモジュールのロードに失敗しました';
+            addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+        });
+
+        function addToTerminal(text) {
+            terminal.innerHTML += text;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // RUN MODE継続実行用の関数
+        function continueRunMode() {
+            if (!isInitialized || !isRunning) {
+                return;
+            }
+            
+            try {
+                // 継続実行
+                let result = Module._nano_basic_wasm_continue();
+                
+                if (result === NB_STATE_RUN_MODE) {
+                    // まだRUN MODEなら、10ms後に再度実行
+                    setTimeout(continueRunMode, 10);
+                } else if (result === NB_STATE_INPUT_NUMBER) {
+                    // INPUT文で数値入力待ち
+                    isRunning = false;
+                    isWaitingForInput = true;
+                    inputField.disabled = false;
+                    executeButton.disabled = false;
+                    status.textContent = '数値を入力してください';
+                    inputField.focus();
+                } else {
+                    // RUN MODEを抜けた
+                    isRunning = false;
+                    inputField.disabled = false;
+                    executeButton.disabled = false;
+                    status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    inputField.focus();
+                    
+                    if (result === NB_STATE_END) {
+                        addToTerminal('\n<span class="prompt">プログラムが終了しました</span>\n');
+                    }
+                }
+            } catch (err) {
+                isRunning = false;
+                inputField.disabled = false;
+                executeButton.disabled = false;
+                addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+                status.textContent = '準備完了 - BASIC コマンドを入力してください';
+            }
+        }
+
+        function executeCommand() {
+            if (!isInitialized) {
+                return;
+            }
+            
+            let input = inputField.value.trim();
+            if (input === '') {
+                return;
+            }
+            
+            // 数値入力待ちの場合
+            if (isWaitingForInput) {
+                let value = parseInt(input);
+                if (isNaN(value)) {
+                    addToTerminal('<span class="error">エラー: 数値を入力してください</span>\n');
+                    inputField.value = '';
+                    return;
+                }
+                
+                addToTerminal(input + '\n');
+                
+                try {
+                    // 数値を設定して処理を継続
+                    let result = Module._nano_basic_wasm_continue_input(value);
+                    
+                    isWaitingForInput = false;
+                    
+                    if (result === NB_STATE_RUN_MODE) {
+                        // RUN MODEに戻った場合、継続実行を開始
+                        isRunning = true;
+                        inputField.disabled = true;
+                        executeButton.disabled = true;
+                        status.textContent = '実行中... (プログラムが終了するまでお待ちください)';
+                        setTimeout(continueRunMode, 10);
+                    } else if (result === NB_STATE_INPUT_NUMBER) {
+                        // 再度入力待ち
+                        status.textContent = '数値を入力してください';
+                    } else if (result === NB_STATE_END) {
+                        addToTerminal('\n<span class="prompt">プログラムが終了しました</span>\n');
+                        status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    } else {
+                        status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    }
+                } catch (err) {
+                    isWaitingForInput = false;
+                    addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+                    status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                }
+                
+                inputField.value = '';
+                inputField.focus();
+                return;
+            }
+            
+            addToTerminal('<span class="prompt">&gt; </span>' + input + '\n');
+            
+            try {
+                // 文字列をメモリに配置
+                const lengthBytes = Module.lengthBytesUTF8(input) + 1;
+                const ptr = Module._malloc(lengthBytes);
+                Module.stringToUTF8(input, ptr, lengthBytes);
+                
+                // コマンドを実行
+                let result = Module._nano_basic_wasm_exec(ptr);
+                
+                // メモリを解放
+                Module._free(ptr);
+                
+                if (result < 0) {
+                    addToTerminal('<span class="error">エラー: 入力が長すぎます</span>\n');
+                } else if (result === NB_STATE_RUN_MODE) {
+                    // RUN MODEに入った場合、継続実行を開始
+                    isRunning = true;
+                    inputField.disabled = true;
+                    executeButton.disabled = true;
+                    status.textContent = '実行中... (プログラムが終了するまでお待ちください)';
+                    // 10ms後に継続実行を開始
+                    setTimeout(continueRunMode, 10);
+                } else if (result === NB_STATE_INPUT_NUMBER) {
+                    // INPUT文で数値入力待ち
+                    isWaitingForInput = true;
+                    status.textContent = '数値を入力してください';
+                }
+            } catch (err) {
+                addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+            }
+            
+            inputField.value = '';
+            inputField.focus();
+        }
+
+        function clearTerminal() {
+            terminal.textContent = '';
+            if (Module && isInitialized) {
+                Module._nano_basic_wasm_clear_output();
+            }
+        }
+
+        // Enterキーで実行
+        inputField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+    </script>
+</body>
+</html>

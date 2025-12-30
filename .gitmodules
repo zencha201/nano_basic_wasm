@@ -1,0 +1,3 @@
+[submodule "lib/nano_basic"]
+	path = lib/nano_basic
+	url = https://github.com/zencha201/nano_basic
