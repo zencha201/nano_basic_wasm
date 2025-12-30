@@ -93,6 +93,12 @@
         let executeButton = document.getElementById('execute');
         let status = document.getElementById('status');
         let isInitialized = false;
+        let isRunning = false;
+        
+        const NB_STATE_RUN_MODE = 0;
+        const NB_STATE_REPL = 1;
+        const NB_STATE_INPUT_NUMBER = 2;
+        const NB_STATE_END = 3;
 
         // WASMモジュールをロード
         createNanoBasicModule().then(function(module) {
@@ -127,6 +133,39 @@
             terminal.innerHTML += text;
             terminal.scrollTop = terminal.scrollHeight;
         }
+        
+        // RUN MODE継続実行用の関数
+        function continueRunMode() {
+            if (!isInitialized || !isRunning) {
+                return;
+            }
+            
+            try {
+                // 継続実行
+                let result = Module._nano_basic_wasm_continue();
+                
+                if (result === NB_STATE_RUN_MODE) {
+                    // まだRUN MODEなら、10ms後に再度実行
+                    setTimeout(continueRunMode, 10);
+                } else {
+                    // RUN MODEを抜けた
+                    isRunning = false;
+                    inputField.disabled = false;
+                    executeButton.disabled = false;
+                    status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    
+                    if (result === NB_STATE_END) {
+                        addToTerminal('\n<span class="prompt">プログラムが終了しました</span>\n');
+                    }
+                }
+            } catch (err) {
+                isRunning = false;
+                inputField.disabled = false;
+                executeButton.disabled = false;
+                addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+                status.textContent = '準備完了 - BASIC コマンドを入力してください';
+            }
+        }
 
         function executeCommand() {
             if (!isInitialized) {
@@ -154,6 +193,14 @@
                 
                 if (result < 0) {
                     addToTerminal('<span class="error">エラー: 入力が長すぎます</span>\n');
+                } else if (result === NB_STATE_RUN_MODE) {
+                    // RUN MODEに入った場合、継続実行を開始
+                    isRunning = true;
+                    inputField.disabled = true;
+                    executeButton.disabled = true;
+                    status.textContent = '実行中... (プログラムが終了するまでお待ちください)';
+                    // 10ms後に継続実行を開始
+                    setTimeout(continueRunMode, 10);
                 }
             } catch (err) {
                 addToTerminal('<span class="error">エラー: ' + err + '</span>\n');

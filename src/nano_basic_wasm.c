@@ -123,7 +123,7 @@ EMSCRIPTEN_KEEPALIVE
 int nano_basic_wasm_exec(const char *input)
 {
     NB_STATE state = NB_STATE_REPL;
-    NB_SIZE size = strlen(input);
+    NB_SIZE size = strlen(input) + 1; // 終端文字分を含むサイズ
     
     if (size >= BUF_SIZE) {
         return -1; // エラー: 入力が長すぎる
@@ -134,6 +134,20 @@ int nano_basic_wasm_exec(const char *input)
     output_buffer[0] = '\0';
     
     state = nano_basic_proc(state, buf, size);
+    js_output_flush();
+    
+    return (int)state;
+}
+
+// RUN MODE継続実行用の関数
+EMSCRIPTEN_KEEPALIVE
+int nano_basic_wasm_continue()
+{
+    NB_STATE state = NB_STATE_RUN_MODE;
+    
+    // 空の入力でnano_basic_procを呼び出して継続実行
+    buf[0] = '\0';
+    state = nano_basic_proc(state, buf, 1);
     js_output_flush();
     
     return (int)state;
