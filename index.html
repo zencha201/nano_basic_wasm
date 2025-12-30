@@ -94,6 +94,7 @@
         let status = document.getElementById('status');
         let isInitialized = false;
         let isRunning = false;
+        let isWaitingForInput = false;
         
         const NB_STATE_RUN_MODE = 0;
         const NB_STATE_REPL = 1;
@@ -147,6 +148,14 @@
                 if (result === NB_STATE_RUN_MODE) {
                     // まだRUN MODEなら、10ms後に再度実行
                     setTimeout(continueRunMode, 10);
+                } else if (result === NB_STATE_INPUT_NUMBER) {
+                    // INPUT文で数値入力待ち
+                    isRunning = false;
+                    isWaitingForInput = true;
+                    inputField.disabled = false;
+                    executeButton.disabled = false;
+                    status.textContent = '数値を入力してください';
+                    inputField.focus();
                 } else {
                     // RUN MODEを抜けた
                     isRunning = false;
@@ -178,6 +187,50 @@
                 return;
             }
             
+            // 数値入力待ちの場合
+            if (isWaitingForInput) {
+                let value = parseInt(input);
+                if (isNaN(value)) {
+                    addToTerminal('<span class="error">エラー: 数値を入力してください</span>\n');
+                    inputField.value = '';
+                    return;
+                }
+                
+                addToTerminal(input + '\n');
+                
+                try {
+                    // 数値を設定して処理を継続
+                    let result = Module._nano_basic_wasm_continue_input(value);
+                    
+                    isWaitingForInput = false;
+                    
+                    if (result === NB_STATE_RUN_MODE) {
+                        // RUN MODEに戻った場合、継続実行を開始
+                        isRunning = true;
+                        inputField.disabled = true;
+                        executeButton.disabled = true;
+                        status.textContent = '実行中... (プログラムが終了するまでお待ちください)';
+                        setTimeout(continueRunMode, 10);
+                    } else if (result === NB_STATE_INPUT_NUMBER) {
+                        // 再度入力待ち
+                        status.textContent = '数値を入力してください';
+                    } else if (result === NB_STATE_END) {
+                        addToTerminal('\n<span class="prompt">プログラムが終了しました</span>\n');
+                        status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    } else {
+                        status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                    }
+                } catch (err) {
+                    isWaitingForInput = false;
+                    addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
+                    status.textContent = '準備完了 - BASIC コマンドを入力してください';
+                }
+                
+                inputField.value = '';
+                inputField.focus();
+                return;
+            }
+            
             addToTerminal('<span class="prompt">&gt; </span>' + input + '\n');
             
             try {
@@ -202,6 +255,10 @@
                     status.textContent = '実行中... (プログラムが終了するまでお待ちください)';
                     // 10ms後に継続実行を開始
                     setTimeout(continueRunMode, 10);
+                } else if (result === NB_STATE_INPUT_NUMBER) {
+                    // INPUT文で数値入力待ち
+                    isWaitingForInput = true;
+                    status.textContent = '数値を入力してください';
                 }
             } catch (err) {
                 addToTerminal('<span class="error">エラー: ' + err + '</span>\n');

@@ -139,6 +139,23 @@ int nano_basic_wasm_exec(const char *input)
     return (int)state;
 }
 
+// INPUT文で数値入力待ちの後に処理を継続する関数
+EMSCRIPTEN_KEEPALIVE
+int nano_basic_wasm_continue_input(int value)
+{
+    NB_STATE state = NB_STATE_INPUT_NUMBER;
+    
+    // 入力値をセット
+    nano_basic_set_input_value((NB_VALUE)value);
+    
+    // 空の入力で処理を継続
+    buf[0] = '\0';
+    state = nano_basic_proc(state, buf, 1);
+    js_output_flush();
+    
+    return (int)state;
+}
+
 // RUN MODE継続実行用の関数
 EMSCRIPTEN_KEEPALIVE
 int nano_basic_wasm_continue()
