@@ -105,11 +105,11 @@ SAVE と LOAD コマンドを使用して、プログラムをブラウザのロ
 ```basic
 10 PRINT "HELLO"
 20 END
-SAVE "MYPROG"
+SAVE MYPROG
 ```
 
 ```basic
-LOAD "MYPROG"
+LOAD MYPROG
 LIST
 RUN
 ```
