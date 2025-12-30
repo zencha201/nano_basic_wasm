@@ -68,6 +68,7 @@ Web インターフェースでは、BASIC コマンドを入力して実行で�
 - **自動継続実行**: `RUN` コマンドでプログラムを実行すると、自動的に継続実行されます
 - **リアルタイム出力**: プログラムの出力がリアルタイムでターミナルに表示されます
 - **無限ループ対応**: タイマーベースの実行により、ブラウザがフリーズせずに無限ループも実行可能
+- **ファイル保存機能**: `SAVE`/`LOAD` コマンドでプログラムをブラウザのローカルストレージに保存・読み込み可能
 
 ### 基本的な使用例
 
@@ -92,6 +93,27 @@ RUN
 40 END
 RUN
 ```
+
+### プログラムの保存と読み込み
+
+SAVE と LOAD コマンドを使用して、プログラムをブラウザのローカルストレージに保存・読み込みできます。
+
+```basic
+10 PRINT "HELLO"
+20 END
+SAVE "MYPROG"
+```
+
+```basic
+LOAD "MYPROG"
+LIST
+RUN
+```
+
+**注意:**
+- ファイル名はローカルストレージのキーとして使用されます
+- データはブラウザのローカルストレージに保存されるため、ブラウザのデータをクリアすると削除されます
+- 保存されたプログラムは同じブラウザ・同じドメインでのみアクセス可能です
 
 ### 無限ループの例
 
@@ -133,6 +155,7 @@ const output = Module.UTF8ToString(
 - `_nano_basic_wasm_init()` - インタプリタを初期化
 - `_nano_basic_wasm_exec(ptr)` - コマンドを実行（戻り値: NB_STATE）
 - `_nano_basic_wasm_continue()` - RUN MODE継続実行
+- `_nano_basic_wasm_continue_input(value)` - INPUT命令の入力値を設定して処理を継続（戻り値: NB_STATE）
 - `_nano_basic_wasm_set_input(value)` - INPUT命令の入力値を設定
 - `_nano_basic_wasm_get_output()` - 出力バッファを取得
 - `_nano_basic_wasm_clear_output()` - 出力バッファをクリア

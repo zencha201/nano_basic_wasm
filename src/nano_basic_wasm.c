@@ -27,6 +27,29 @@ EM_JS(void, js_output_flush, (), {
     }
 });
 
+// ローカルストレージ操作用のJavaScript関数
+EM_JS(char*, js_localstorage_get, (const char* key), {
+    var keyStr = UTF8ToString(key);
+    var value = localStorage.getItem(keyStr);
+    if (value === null) {
+        return null;
+    }
+    var lengthBytes = lengthBytesUTF8(value) + 1;
+    var strPtr = _malloc(lengthBytes);
+    stringToUTF8(value, strPtr, lengthBytes);
+    return strPtr;
+});
+
+EM_JS(void, js_localstorage_set, (const char* key, const char* value), {
+    var keyStr = UTF8ToString(key);
+    var valueStr = UTF8ToString(value);
+    localStorage.setItem(keyStr, valueStr);
+});
+
+EM_JS(void, js_free_string, (char* ptr), {
+    _free(ptr);
+});
+
 // プラットフォーム依存関数の実装
 void platform_print_ch(NB_I8 ch)
 {
@@ -37,30 +60,131 @@ void platform_print_ch(NB_I8 ch)
     js_output_char(ch);
 }
 
-static FILE *fp = NULL;
+// ファイルI/O用のバッファとステート管理
+#define FILE_BUFFER_SIZE (4096)
+static NB_I8 file_buffer[FILE_BUFFER_SIZE] = {'\0'};
+static NB_I8 file_name[256] = {'\0'};
+static NB_I8 *file_read_ptr = NULL;
+static NB_SIZE file_write_pos = 0;
+static NB_BOOL file_is_write_mode = NB_FALSE;
+static NB_BOOL file_is_open = NB_FALSE;
+
+static NB_I8 _buf[256] = "";
 
 NB_BOOL platform_fopen(const NB_I8 *name, NB_BOOL write_mode)
 {
-    // WASM環境ではファイルI/Oは非対応
-    return NB_FALSE;
+    if (file_is_open) {
+        return NB_FALSE; // 既にファイルが開かれている
+    }
+    
+    // ファイル名を保存
+    strncpy(file_name, name, sizeof(file_name) - 1);
+    file_name[sizeof(file_name) - 1] = '\0';
+    
+    file_is_write_mode = write_mode;
+    file_is_open = NB_TRUE;
+    
+    if (write_mode) {
+        // 書き込みモード: バッファを初期化
+        file_buffer[0] = '\0';
+        file_write_pos = 0;
+    } else {
+        // 読み込みモード: ローカルストレージからデータを取得
+        char *data = js_localstorage_get(name);
+        if (data == NULL) {
+            // データが存在しない場合は空文字列として扱う
+            file_buffer[0] = '\0';
+            file_read_ptr = file_buffer;
+        } else {
+            // データをバッファにコピー
+            strncpy(file_buffer, data, FILE_BUFFER_SIZE - 1);
+            file_buffer[FILE_BUFFER_SIZE - 1] = '\0';
+            js_free_string(data);
+            file_read_ptr = file_buffer;
+        }
+    }
+    
+    return NB_TRUE;
 }
 
 void platform_fclose()
 {
-    // WASM環境ではファイルI/Oは非対応
+    if (!file_is_open) {
+        return;
+    }
+    
+    if (file_is_write_mode) {
+        // 書き込みモードの場合、ローカルストレージに保存
+        js_localstorage_set(file_name, file_buffer);
+    }
+    
+    file_is_open = NB_FALSE;
+    file_read_ptr = NULL;
+    file_write_pos = 0;
 }
 
-static NB_I8 _buf[256] = "";
 NB_BOOL platform_fread(NB_I8 **buf, NB_SIZE *size)
 {
-    // WASM環境ではファイルI/Oは非対応
-    return NB_FALSE;
+    if (!file_is_open || file_is_write_mode) {
+        return NB_FALSE;
+    }
+    
+    if (file_read_ptr == NULL || *file_read_ptr == '\0') {
+        return NB_FALSE; // EOF
+    }
+    
+    // 1行読み込み（改行文字まで、または文字列終端まで）
+    NB_SIZE i = 0;
+    while (file_read_ptr[i] != '\0' && file_read_ptr[i] != '\n' && i < 255) {
+        _buf[i] = file_read_ptr[i];
+        i++;
+    }
+    _buf[i] = '\0';
+    
+    // ポインタを次の行に進める
+    if (file_read_ptr[i] == '\n') {
+        file_read_ptr += i + 1; // 改行文字の次へ
+    } else {
+        file_read_ptr += i; // 文字列終端へ
+    }
+    
+    *buf = _buf;
+    *size = i;
+    
+    return NB_TRUE;
 }
 
 NB_BOOL platform_fwrite(NB_LINE_NUM num, NB_I8 *buf, NB_SIZE size)
 {
-    // WASM環境ではファイルI/Oは非対応
-    return NB_FALSE;
+    if (!file_is_open || !file_is_write_mode) {
+        return NB_FALSE;
+    }
+    
+    // 行番号を文字列化
+    NB_I8 num_str[16];
+    int num_len = sprintf(num_str, "%d ", (int)num);
+    
+    // bufの実際の長さを取得（ヌル終端文字列として扱う）
+    NB_SIZE buf_len = strlen(buf);
+    
+    // バッファに余裕があるかチェック（行番号 + スペース + 内容 + 改行 + 終端）
+    if (file_write_pos + num_len + buf_len + 2 >= FILE_BUFFER_SIZE) {
+        return NB_FALSE; // バッファオーバーフロー
+    }
+    
+    // 行番号とスペースを書き込み
+    memcpy(file_buffer + file_write_pos, num_str, num_len);
+    file_write_pos += num_len;
+    
+    // 内容を書き込み（ヌル終端文字列として）
+    memcpy(file_buffer + file_write_pos, buf, buf_len);
+    file_write_pos += buf_len;
+    
+    // 改行を追加
+    file_buffer[file_write_pos++] = '\n';
+    file_buffer[file_write_pos] = '\0';
+    
+    return NB_TRUE;
 }
 
 NB_VALUE platform_import(NB_VALUE num)

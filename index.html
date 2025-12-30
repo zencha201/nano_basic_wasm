@@ -124,7 +124,9 @@
             status.textContent = '準備完了 - BASIC コマンドを入力してください';
             
             addToTerminal('<span class="prompt">Nano BASIC WASM へようこそ！</span>\n');
-            addToTerminal('<span class="prompt">例: 10 PRINT "HELLO"\n20 GOTO 10\nRUN</span>\n\n');
+            addToTerminal('<span class="prompt">例: 10 PRINT "HELLO"\nRUN</span>\n');
+            addToTerminal('<span class="prompt">SAVE/LOAD: プログラムをローカルストレージに保存・読み込みできます</span>\n');
+            addToTerminal('<span class="prompt">例: SAVE "MYPROG" / LOAD "MYPROG"</span>\n\n');
         }).catch(function(err) {
             status.textContent = 'エラー: WASMモジュールのロードに失敗しました';
             addToTerminal('<span class="error">エラー: ' + err + '</span>\n');
